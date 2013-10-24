@@ -38,27 +38,31 @@ isa = isinstance
 
 def eval(x, env=global_env):
     "Evaluate an expression in an environment."
-    if isa(x, Symbol):             # variable reference
+    if x.t == "symbol":             # variable reference
         return env.find(x)[x]
-    elif not isa(x, list):         # constant literal
-        return x                
-    elif x[0] == 'quote':          # (quote exp)
-        (_, exp) = x
+    elif not x.t == "list":         # constant literal
+        return x.i               
+    
+    xlist = x.l
+    xcar = xlist[0]
+
+    if xcar == 'quote':          # (quote exp)
+        (_, exp) = xlist
         return exp
-    elif x[0] == 'if':             # (if test conseq alt)
-        (_, test, conseq, alt) = x
+    elif xcar == 'if':             # (if test conseq alt)
+        (_, test, conseq, alt) = xlist
         return eval((conseq if eval(test, env) else alt), env)
-    elif x[0] == 'set!':           # (set! var exp)
-        (_, var, exp) = x
+    elif xcar == 'set!':           # (set! var exp)
+        (_, var, exp) = xlist
         env.find(var)[var] = eval(exp, env)
-    elif x[0] == 'define':         # (define var exp)
-        (_, var, exp) = x
+    elif xcar == 'define':         # (define var exp)
+        (_, var, exp) = xlist
         env[var] = eval(exp, env)
-    elif x[0] == 'lambda':         # (lambda (var*) exp)
-        (_, vars, exp) = x
+    elif xcar == 'lambda':         # (lambda (var*) exp)
+        (_, vars, exp) = xlost
         return lambda *args: eval(exp, Env(vars, args, env))
-    elif x[0] == 'begin':          # (begin exp*)
-        for exp in x[1:]:
+    elif xcar == 'begin':          # (begin exp*)
+        for exp in xlist[1:]:
             val = eval(exp, env)
         return val
     else:                          # (proc exp*)
@@ -67,6 +71,16 @@ def eval(x, env=global_env):
         return proc(*exps)
 
 ################ parse, read, and user interaction
+class Node(object):
+    """docstring fss Node"""
+    def __init__(self, t):
+        self.t = t
+
+    def to_string(self):
+        if self.t=="int": return str(self.i)
+        elif self.t=="float": return str(self.f)
+        else: return self.s
+
 
 def read(s):
     "Read a Scheme expression from a string."
@@ -96,11 +110,22 @@ def read_from(tokens):
 
 def atom(token):
     "Numbers become numbers; every other token is a symbol."
-    try: return int(token)
+    try: 
+        i = int(token)
+        n = Node("int")
+        n.i = i
+        return n
     except ValueError:
-        try: return float(token)
+        try:
+            f = float(token)
+            n = Node("float")
+            n.f = f
+            return n
         except ValueError:
-            return Symbol(token)
+            s = Symbol(token)
+            n = Node("symbol")
+            n.s = s
+            return n
 
 def to_string(exp):
     "Convert a Python object back into a Lisp-readable string."
