@@ -5,34 +5,36 @@
 ################ Symbol, Env classes
 
 from __future__ import division
+import sys
+import os
 
 Symbol = str
 
-class Env(dict):
-    "An environment: a dict of {'var':val} pairs, with an outer Env."
-    def __init__(self, parms=(), args=(), outer=None):
-        self.update(zip(parms,args))
-        self.outer = outer
-    def find(self, var):
-        "Find the innermost Env where var appears."
-        return self if var in self else self.outer.find(var)
+#class Env(dict):
+#    "An environment: a dict of {'var':val} pairs, with an outer Env."
+#    def __init__(self, parms=(), args=(), outer=None):
+#        self.update(zip(parms,args))
+#        self.outer = outer
+#    def find(self, var):
+#        "Find the innermost Env where var appears."
+#        return self if var in self else self.outer.find(var)
 
-def add_globals(env):
-    "Add some Scheme standard procedures to an environment."
-    import math, operator as op
-    env.update(vars(math)) # sin, sqrt, ...
-    env.update(
-     {'+':op.add, '-':op.sub, '*':op.mul, '/':op.div, 'not':op.not_,
-      '>':op.gt, '<':op.lt, '>=':op.ge, '<=':op.le, '=':op.eq, 
-      'equal?':op.eq, 'eq?':op.is_, 'length':len, 'cons':lambda x,y:[x]+y,
-      'car':lambda x:x[0],'cdr':lambda x:x[1:], 'append':op.add,  
-      'list':lambda *x:list(x), 'list?': lambda x:isa(x,list), 
-      'null?':lambda x:x==[], 'symbol?':lambda x: isa(x, Symbol)})
-    return env
+#def add_globals(env):
+#    "Add some Scheme standard procedures to an environment."
+#    import math, operator as op
+#    env.update(vars(math)) # sin, sqrt, ...
+#    env.update(
+#     {'+':op.add, '-':op.sub, '*':op.mul, '/':op.div, 'not':op.not_,
+#      '>':op.gt, '<':op.lt, '>=':op.ge, '<=':op.le, '=':op.eq, 
+#      'equal?':op.eq, 'eq?':op.is_, 'length':len, 'cons':lambda x,y:[x]+y,
+#      'car':lambda x:x[0],'cdr':lambda x:x[1:], 'append':op.add,  
+#      'list':lambda *x:list(x), 'list?': lambda x:isa(x,list), 
+#      'null?':lambda x:x==[], 'symbol?':lambda x: isa(x, Symbol)})
+#    return env
 
-global_env = add_globals(Env())
+#global_env = add_globals(Env())
 
-isa = isinstance
+#isa = isinstance
 
 ################ eval
 
@@ -70,6 +72,7 @@ def eval(x, env=global_env):
         proc = exps.pop(0)
         return proc(*exps)
 
+
 ################ parse, read, and user interaction
 class Node(object):
     """docstring fss Node"""
@@ -81,6 +84,12 @@ class Node(object):
         elif self.t=="float": return str(self.f)
         else: return self.s
 
+    def __int__(self):
+        return self.i
+
+    def __add__(a,b):
+        return a.i + b.i
+
 
 def read(s):
     "Read a Scheme expression from a string."
@@ -90,19 +99,23 @@ parse = read
 
 def tokenize(s):
     "Convert a string into a list of tokens."
-    return s.replace('(',' ( ').replace(')',' ) ').split()
+    #return s.replace('(',' ( ').replace(')',' ) ').split(' ')
+    return s.split(' ')
 
 def read_from(tokens):
     "Read an expression from a sequence of tokens."
     if len(tokens) == 0:
         raise SyntaxError('unexpected EOF while reading')
     token = tokens.pop(0)
+    #print "popping: %s\n" % token
     if '(' == token:
         L = []
         while tokens[0] != ')':
             L.append(read_from(tokens))
         tokens.pop(0) # pop off ')'
-        return L
+        n = Node("list")
+        n.l = L
+        return n
     elif ')' == token:
         raise SyntaxError('unexpected )')
     else:
@@ -114,6 +127,8 @@ def atom(token):
         i = int(token)
         n = Node("int")
         n.i = i
+
+        #print "found int"
         return n
     except ValueError:
         try:
@@ -129,7 +144,39 @@ def atom(token):
 
 def to_string(exp):
     "Convert a Python object back into a Lisp-readable string."
-    return '('+' '.join(map(to_string, exp))+')' if isa(exp, list) else str(exp)
+    if exp.t == "list":
+        s = '('
+        for e in exp.l:
+            s += to_string(e) + ' '
+        s += ')'
+        return s
+    return exp.to_string()
+
+def run(fp):
+    program_contents = ""
+    while True:
+        read = os.read(fp, 4096)
+        if len(read) == 0:
+            break
+        program_contents += read
+    os.close(fp)
+    program = parse(program_contents)
+    print to_string(program)
+#    val = eval(program)
+#    if val is not None: print to_string(val)
+
+def entry_point(argv):
+    try:
+        filename = argv[1]
+    except IndexError:
+        print "You must supply a filename"
+        return 1
+
+    run(os.open(filename, os.O_RDONLY, 0777))
+    return 0
+
+def target(*args):
+    return entry_point, None
 
 def repl(prompt='lis.py> '):
     "A prompt-read-eval-print loop."
@@ -138,9 +185,13 @@ def repl(prompt='lis.py> '):
         if val is not None: print to_string(val)
 
 if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        entry_point(sys.argv);
+        exit(0)
+
     while True:
         try: repl()
         except KeyboardInterrupt:
             print "\nbye!\n"
             break
-        except Exception as e: print 'Error: %s' % e
+        #except Exception as e: print 'Error: %s' % e
