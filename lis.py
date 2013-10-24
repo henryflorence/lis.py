@@ -10,14 +10,14 @@ import os
 
 Symbol = str
 
-#class Env(dict):
-#    "An environment: a dict of {'var':val} pairs, with an outer Env."
-#    def __init__(self, parms=(), args=(), outer=None):
-#        self.update(zip(parms,args))
-#        self.outer = outer
-#    def find(self, var):
-#        "Find the innermost Env where var appears."
-#        return self if var in self else self.outer.find(var)
+class Env(dict):
+    "An environment: a dict of {'var':val} pairs, with an outer Env."
+    def __init__(self, parms=(), args=(), outer=None):
+        self.update(zip(parms,args))
+        self.outer = outer
+    def find(self, var):
+        "Find the innermost Env where var appears."
+        return self if var in self else self.outer.find(var)
 
 #def add_globals(env):
 #    "Add some Scheme standard procedures to an environment."
@@ -33,6 +33,7 @@ Symbol = str
 #    return env
 
 #global_env = add_globals(Env())
+global_env = Env()
 
 #isa = isinstance
 
@@ -88,7 +89,7 @@ class Node(object):
         return self.i
 
     def __add__(a,b):
-        return a.i + b.i
+        return Node(a.i + b.i,"int")
 
 
 def read(s):
@@ -99,7 +100,17 @@ parse = read
 
 def tokenize(s):
     "Convert a string into a list of tokens."
-    #return s.replace('(',' ( ').replace(')',' ) ').split(' ')
+    # original code:
+    # return s.replace('(',' ( ').replace(')',' ) ').split(' ')
+    # converted to rpython:
+
+    ci = 0
+    while ci < len(s):
+        if s[ci] == '(' or s[ci] == ')':
+            s = s[:ci] + ' ' + s[ci] + ' ' + s[ci+1:]
+            ci += 3
+        ci += 1
+    
     return s.split(' ')
 
 def read_from(tokens):
@@ -161,7 +172,7 @@ def run(fp):
         program_contents += read
     os.close(fp)
     program = parse(program_contents)
-    print to_string(program)
+    print program.s, to_string(program)
 #    val = eval(program)
 #    if val is not None: print to_string(val)
 
